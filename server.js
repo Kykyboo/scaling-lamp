@@ -91,22 +91,49 @@ app.get('/panel', (req, res) => {
         return res.send('<h1>Niet ingelogd</h1><p>Log eerst in via Discord: <a href="/login">Inloggen met Discord</a></p>');
     }
 
-    // HTML Dashboard voor het beheer van geld/data
+    const searchId = req.query.userId;
+    let playerDataHtml = '';
+
+    if (searchId) {
+        if (database[searchId]) {
+            playerDataHtml = `
+                <div class="card" style="border: 1px solid #5865F2;">
+                    <h3>Data voor Speler ID: ${searchId}</h3>
+                    <pre style="background: #111; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(database[searchId], null, 2)}</pre>
+                </div>
+            `;
+        } else {
+            playerDataHtml = `<p style="color: #ff5555;">Speler met ID ${searchId} is niet gevonden in het geheugen.</p>`;
+        }
+    }
+
     res.send(`
         <html>
         <head>
             <title>Roblox Admin Paneel</title>
             <style>
                 body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 40px; }
-                .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; width: 400px; }
+                .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; width: 450px; }
                 input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
                 button { background: #5865F2; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
                 button:hover { background: #4752C4; }
+                pre { color: #51f551; }
             </style>
         </head>
         <body>
             <h1>🎮 Roblox Game Admin Paneel</h1>
             <p>Ingelogd als beheerder.</p>
+
+            <div class="card">
+                <h3>Speler Data Bekijken</h3>
+                <form action="/panel" method="GET">
+                    <label>Speler User ID:</label>
+                    <input type="text" name="userId" placeholder="Bijv. 2233747337" value="${searchId || ''}" required>
+                    <button type="submit">Data Inzien</button>
+                </form>
+            </div>
+
+            ${playerDataHtml}
             
             <div class="card">
                 <h3>Geld / Contant aanpassen</h3>
