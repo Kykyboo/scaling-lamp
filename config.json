@@ -1,0 +1,12 @@
+{
+    "testMode": false,
+    "apiKey": "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK",
+    "discord": {
+        "clientId": "1550876215592882356",
+        "clientSecret": "jxZautoqlEgF2VUYDFa3XUC0ZnywCI3v",
+        "redirectUri": "http://localhost:3000/auth/discord/callback",
+        "guildId": "1500515809380794561",
+        "allowedRoleId": "1500605095522599072",
+        "webhookUrl": "https://discord.com/api/webhooks/1550868735437447388/UzUjFVHpy1Rwyfce_uqEgNUIpP7SSFGS3gzPp-q0iwEWEdwBrGw_1AZb7E3szc_PCd_o"
+    }
+}
