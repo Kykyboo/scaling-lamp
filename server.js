@@ -26,18 +26,25 @@ function writeDB(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// Simpele middleware voor API Key beveiliging
+// Middleware voor API Key beveiliging met extra debug logging
 app.use((req, res, next) => {
-    const key = req.headers['x-api-key'];
-    if (key !== API_KEY) {
-        return res.status(403).json({ error: "Geen toegang: Ongeldige API Key" });
+    const receivedKey = req.headers['x-api-key'];
+    
+    // Print dit in je Render logs zodat je kunt zien wat Roblox meestuurt
+    console.log(`[AUTH CHECK] Ontvangen API-key: "${receivedKey}"`);
+
+    if (receivedKey !== API_KEY) {
+        return res.status(403).json({ 
+            error: "Geen toegang: Ongeldige API Key", 
+            ontvangen: receivedKey 
+        });
     }
     next();
 });
 
 // Root check
 app.get('/', (req, res) => {
-    res.send("API draait zonder MySQL!");
+    res.send("API draait zonder MySQL en is succesvol verbonden!");
 });
 
 // Speler aanmaken / updaten (POST)
@@ -55,7 +62,7 @@ app.post('/player/create', (req, res) => {
     };
     writeDB(db);
 
-    console.log(`[DATA OPGESLAGEN] Speler ${userId} bijgewerkt.`);
+    console.log(`[DATA OPGESLAGEN] Speler ${userId} succesvol bijgewerkt.`);
     res.json({ success: true, message: "Data succesvol opgeslagen!" });
 });
 
