@@ -60,11 +60,12 @@ app.post('/player/load', (req, res) => {
 
 // Create data
 app.post(['/player/create', '/createPlayerData'], async (req, res) => {
-    const userId = req.body.userId || req.body.user_id;
-    const data = req.body.data;
+    // We vangen nu ook req.body.player_id op!
+    const userId = req.body.userId || req.body.user_id || req.body.player_id;
+    const data = req.body.data || req.body; // Soms stuurt de game de data direct in de body
     
     if (userId) {
-        database[userId] = data || {};
+        database[userId] = data;
         res.json({ success: true });
     } else {
         await sendDiscordAlert("Create Data Failed", `Ontbrekende userId bij create request. Body: ${JSON.stringify(req.body)}`);
@@ -74,11 +75,15 @@ app.post(['/player/create', '/createPlayerData'], async (req, res) => {
 
 // Save data
 app.post(['/player/save', '/savePlayerData'], (req, res) => {
-    const userId = req.body.userId || req.body.user_id;
-    const data = req.body.data;
+    const userId = req.body.userId || req.body.user_id || req.body.player_id;
+    const data = req.body.data || req.body;
     
-    database[userId] = data;
-    res.json({ success: true });
+    if (userId) {
+        database[userId] = data;
+        res.json({ success: true });
+    } else {
+        res.status(400).json({ success: false, error: "Missing userId" });
+    }
 });
 
 // Lock / Unlock data
