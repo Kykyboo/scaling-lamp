@@ -6,7 +6,6 @@ const app = express();
 app.use(express.json());
 
 const DB_FILE = path.join(__dirname, 'database.json');
-const API_KEY = "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK"; // Dezelfde key als in Roblox
 
 // Hulpfunctie om database in te lezen
 function readDB() {
@@ -26,25 +25,9 @@ function writeDB(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// Middleware voor API Key beveiliging met extra debug logging
-app.use((req, res, next) => {
-    const receivedKey = req.headers['x-api-key'];
-    
-    // Print dit in je Render logs zodat je kunt zien wat Roblox meestuurt
-    console.log(`[AUTH CHECK] Ontvangen API-key: "${receivedKey}"`);
-
-    if (receivedKey !== API_KEY) {
-        return res.status(403).json({ 
-            error: "Geen toegang: Ongeldige API Key", 
-            ontvangen: receivedKey 
-        });
-    }
-    next();
-});
-
 // Root check
 app.get('/', (req, res) => {
-    res.send("API draait zonder MySQL en is succesvol verbonden!");
+    res.send("API draait en is klaar voor Roblox!");
 });
 
 // Speler aanmaken / updaten (POST)
@@ -83,5 +66,5 @@ app.get('/player/get', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server draait op poort ${PORT} zonder MySQL.`);
+    console.log(`Server draait op poort ${PORT} zonder API-key check.`);
 });
