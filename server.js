@@ -2,27 +2,29 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Je geheime API key (dezelfde die je in Roblox in je Config zet)
-const API_KEY = "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK";
+const API_KEY = "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK"; // Je API key
 
 app.use(express.json());
 
-// Simpele database in het geheugen (voor productie kun je dit vervangen door MongoDB of MySQL)
 let database = {};
 let locks = {};
 
-// Middleware om de API key te controleren
-const checkAuth = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    if (authHeader === `Bearer ${API_KEY}`) {
-        next();
-    } else {
-        res.status(403).json({ success: false, error: "Unauthorized" });
-    }
-};
+// Root check voor status
+app.get('/', (req, res) => {
+    res.send('Roblox API Backend is online!');
+});
 
-// 1. Data inladen / bestaan checken
-app.post('/player/load', checkAuth, (req, res) => {
+// Ondersteuning voor loadPlayerData (zowel GET als POST voor de zekerheid)
+app.get('/loadPlayerData', (req, res) => {
+    const userId = req.query.user_id;
+    if (database[userId]) {
+        res.json({ success: true, exists: true, data: database[userId] });
+    } else {
+        res.json({ success: true, exists: false });
+    }
+});
+
+app.post('/player/load', (req, res) => {
     const { userId } = req.body;
     if (database[userId]) {
         res.json({ success: true, exists: true, data: database[userId] });
@@ -31,36 +33,25 @@ app.post('/player/load', checkAuth, (req, res) => {
     }
 });
 
-// 2. Data aanmaken
-app.post('/player/create', checkAuth, (req, res) => {
+app.post('/player/create', (req, res) => {
     const { userId, data } = req.body;
     database[userId] = data;
     res.json({ success: true });
 });
 
-// 3. Data opslaan
-app.post('/player/save', checkAuth, (req, res) => {
+app.post('/player/save', (req, res) => {
     const { userId, data } = req.body;
-    if (database[userId]) {
-        database[userId] = data;
-        res.json({ success: true });
-    } else {
-        res.json({ success: false, error: "Data not found" });
-    }
+    database[userId] = data;
+    res.json({ success: true });
 });
 
-// 4. Data locken (voorkom dubbele logins)
-app.post('/player/lock', checkAuth, (req, res) => {
+app.post('/player/lock', (req, res) => {
     const { userId } = req.body;
-    if (locks[userId]) {
-        res.json({ success: false, error: "Already locked" });
-    } else {
-        locks[userId] = true;
-        res.json({ success: true });
-    }
+    locks[userId] = true;
+    res.json({ success: true });
 });
 
-app.post('/player/unlock', checkAuth, (req, res) => {
+app.post('/player/unlock', (req, res) => {
     const { userId } = req.body;
     delete locks[userId];
     res.json({ success: true });
