@@ -3,7 +3,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Je geheime API key (dezelfde die je in Roblox in je Config zet)
-const API_KEY = "JOUW_GEHEIME_API_KEY_HIER";
+const API_KEY = "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK";
 
 app.use(express.json());
 
