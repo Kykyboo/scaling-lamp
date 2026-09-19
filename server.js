@@ -3,18 +3,43 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const API_KEY = "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK";
+const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550868735437447388/UzUjFVHpy1Rwyfce_uqEgNUIpP7SSFGS3gzPp-q0iwEWEdwBrGw_1AZb7E3szc_PCd_o"; // Plak hier je Discord webhook link
 
 app.use(express.json());
 
 let database = {};
 let locks = {};
 
+// Functie om errors naar Discord te sturen
+async function sendDiscordAlert(title, message) {
+    if (!DISCORD_WEBHOOK_URL || DISCORD_WEBHOOK_URL.includes("JOUW_DISCORD")) return;
+    
+    try {
+        const payload = {
+            embeds: [{
+                title: `🚨 VPS Error: ${title}`,
+                description: `\`\`\`json\n${message}\n\`\`\``,
+                color: 16711680, // Rood
+                timestamp: new Date().toISOString()
+            }]
+        };
+
+        await fetch(DISCORD_WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch (err) {
+        console.error("Kon geen melding naar Discord sturen:", err);
+    }
+}
+
 // Root check
 app.get('/', (req, res) => {
     res.send('Roblox API Backend is online!');
 });
 
-// Load data (GET of POST)
+// Load data
 app.get('/loadPlayerData', (req, res) => {
     const userId = req.query.user_id;
     if (database[userId]) {
@@ -33,8 +58,8 @@ app.post('/player/load', (req, res) => {
     }
 });
 
-// Create data (ondersteunt zowel /player/create als /createPlayerData)
-app.post(['/player/create', '/createPlayerData'], (req, res) => {
+// Create data
+app.post(['/player/create', '/createPlayerData'], async (req, res) => {
     const userId = req.body.userId || req.body.user_id;
     const data = req.body.data;
     
@@ -42,6 +67,7 @@ app.post(['/player/create', '/createPlayerData'], (req, res) => {
         database[userId] = data || {};
         res.json({ success: true });
     } else {
+        await sendDiscordAlert("Create Data Failed", `Ontbrekende userId bij create request. Body: ${JSON.stringify(req.body)}`);
         res.status(400).json({ success: false, error: "Missing userId" });
     }
 });
@@ -51,13 +77,8 @@ app.post(['/player/save', '/savePlayerData'], (req, res) => {
     const userId = req.body.userId || req.body.user_id;
     const data = req.body.data;
     
-    if (database[userId]) {
-        database[userId] = data;
-        res.json({ success: true });
-    } else {
-        database[userId] = data; // Aanmaken als het nog niet bestond
-        res.json({ success: true });
-    }
+    database[userId] = data;
+    res.json({ success: true });
 });
 
 // Lock / Unlock data
