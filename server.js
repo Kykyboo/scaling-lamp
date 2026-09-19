@@ -1,17 +1,24 @@
 const express = require('express');
 const session = require('express-session');
+const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const API_KEY = "FAHKJHSKAHFKJSAHFKAHFKJAFSAKHFK";
-const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1550868735437447388/UzUjFVHpy1Rwyfce_uqEgNUIpP7SSFGS3gzPp-q0iwEWEdwBrGw_1AZb7E3szc_PCd_o";
+// Laad configuratie uit config.json
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
-// --- DISCORD OAUTH CONFIGURATIE ---
-const CLIENT_ID = "1550876215592882356";
-const CLIENT_SECRET = "jxZautoqlEgF2VUYDFa3XUC0ZnywCI3v";
-const REDIRECT_URI = "https://scaling-lamp-jffb.onrender.com/auth/discord/callback";
-const ALLOWED_ROLE_ID = "1500605095522599072";
-const GUILD_ID = "1500515809380794561";
+// MySQL Database Verbinding
+const pool = mysql.createPool({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'roblox_vps',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -21,205 +28,281 @@ app.use(session({
     saveUninitialized: false
 }));
 
-let database = {};
-let locks = {};
+// Stel de public map in zodat statische bestanden (html, afbeeldingen) bereikbaar zijn
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Hulpfunctie voor Discord alerts
-async function sendDiscordAlert(title, message) {
-    if (!DISCORD_WEBHOOK_URL || DISCORD_WEBHOOK_URL.includes("JOUW_DISCORD")) return;
+// Automatisch tabel aanmaken bij opstarten
+async function initDB() {
     try {
-        await fetch(DISCORD_WEBHOOK_URL, {
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS players (
+                user_id VARCHAR(64) PRIMARY KEY,
+                data JSON,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            )
+        `);
+        console.log(`✅ MySQL Database succesvol verbonden. [TestMode: ${config.testMode ? 'AAN 🟡' : 'UIT 🟢'}]`);
+    } catch (err) {
+        console.error("❌ MySQL Fout bij opstarten:", err);
+    }
+}
+initDB();
+
+// Webhookmeldingen in de stijl met JSON codeblock
+async function sendDiscordWebhook(title, description, color = 15158332) {
+    if (!config.discord.webhookUrl || config.discord.webhookUrl.includes("JOUW_DISCORD")) return;
+    try {
+        await fetch(config.discord.webhookUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                embeds: [{ title: `🚨 VPS Alert: ${title}`, description: `\`\`\`json\n${message}\n\`\`\``, color: 16711680 }]
+                embeds: [{
+                    title: title,
+                    description: "```json\n" + description + "\n```",
+                    color: color,
+                    timestamp: new Date().toISOString()
+                }]
             })
         });
-    } catch (err) {}
+    } catch (err) {
+        console.error("Fout bij versturen Discord webhook:", err);
+    }
 }
 
-// ==================== DISCORD LOGIN ROUTES ====================
+// ==================== AUTHENTICATIE ROUTES ====================
 
 app.get('/login', (req, res) => {
-    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify%20guilds.members.read`;
-    res.redirect(discordAuthUrl);
+    res.sendFile(path.join(__dirname, 'public', 'login', 'index.html'));
+});
+
+app.get('/auth/discord/url', (req, res) => {
+    const discordUrl = `https://discord.com/api/oauth2/authorize?client_id=${config.discord.clientId}&redirect_uri=${encodeURIComponent(config.discord.redirectUri)}&response_type=code&scope=identify%20guilds.members.read`;
+    res.json({ url: discordUrl });
 });
 
 app.get('/auth/discord/callback', async (req, res) => {
     const code = req.query.code;
-    if (!code) return res.send('Geen code ontvangen van Discord.');
+    if (!code) return res.redirect('/login');
 
     try {
-        // Token aanvragen
         const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
             method: 'POST',
             body: new URLSearchParams({
-                client_id: CLIENT_ID,
-                client_secret: CLIENT_SECRET,
+                client_id: config.discord.clientId,
+                client_secret: config.discord.clientSecret,
                 grant_type: 'authorization_code',
                 code: code,
-                redirect_uri: REDIRECT_URI,
+                redirect_uri: config.discord.redirectUri,
             }),
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         });
         const tokenData = await tokenRes.json();
-        if (!tokenData.access_token) return res.send('Inloggen mislukt (geen access token).');
+        if (!tokenData.access_token) return res.redirect('/login');
 
-        // Check rollen van de gebruiker in de Discord server
-        const memberRes = await fetch(`https://discord.com/api/users/@me/guilds/${GUILD_ID}/member`, {
+        const memberRes = await fetch(`https://discord.com/api/users/@me/guilds/${config.discord.guildId}/member`, {
             headers: { Authorization: `Bearer ${tokenData.access_token}` }
         });
         const memberData = await memberRes.json();
 
-        if (!memberRes.ok || !memberData.roles || !memberData.roles.includes(ALLOWED_ROLE_ID)) {
-            return res.send('<h1>Toegang geweigerd</h1><p>Je hebt niet de juiste Discord-rol om dit paneel te bekijken.</p>');
+        if (!config.testMode && (!memberRes.ok || !memberData.roles || !memberData.roles.includes(config.discord.allowedRoleId))) {
+            return res.send(`
+                <body style="background:#0f0f13;color:#fff;font-family:sans-serif;text-align:center;padding-top:100px;">
+                    <h1 style="color:#ff5555;">Toegang geweigerd</h1>
+                    <p>Je hebt niet de vereiste Discord-rol om dit paneel te bekijken.</p>
+                    <a href="/login" style="color:#5865F2;">Terug naar login</a>
+                </body>
+            `);
         }
 
-        // Sla sessie op dat gebruiker is ingelogd
+        const userRes = await fetch('https://discord.com/api/users/@me', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        const userData = await userRes.json();
+        memberData.username = userData.username;
+
         req.session.user = memberData;
         res.redirect('/panel');
     } catch (err) {
         console.error(err);
-        res.send('Er is een fout opgetreden bij het inloggen.');
+        res.send('Er is een fout opgetreden bij de authenticatie.');
     }
 });
 
-// ==================== ADMIN PANEEL PAGINA ====================
+// ==================== PANEL & SPELER BEHEER ROUTES ====================
 
 app.get('/panel', (req, res) => {
-    if (!req.session.user) {
-        return res.send('<h1>Niet ingelogd</h1><p>Log eerst in via Discord: <a href="/login">Inloggen met Discord</a></p>');
-    }
-
-    const searchId = req.query.userId;
-    let playerDataHtml = '';
-
-    if (searchId) {
-        if (database[searchId]) {
-            playerDataHtml = `
-                <div class="card" style="border: 1px solid #5865F2;">
-                    <h3>Data voor Speler ID: ${searchId}</h3>
-                    <pre style="background: #111; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(database[searchId], null, 2)}</pre>
-                </div>
-            `;
-        } else {
-            playerDataHtml = `<p style="color: #ff5555;">Speler met ID ${searchId} is niet gevonden in het geheugen.</p>`;
-        }
-    }
-
-    res.send(`
-        <html>
-        <head>
-            <title>Roblox Admin Paneel</title>
-            <style>
-                body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 40px; }
-                .card { background: #1e1e1e; padding: 20px; border-radius: 8px; margin-bottom: 20px; width: 450px; }
-                input, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; }
-                button { background: #5865F2; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
-                button:hover { background: #4752C4; }
-                pre { color: #51f551; }
-            </style>
-        </head>
-        <body>
-            <h1>🎮 Roblox Game Admin Paneel</h1>
-            <p>Ingelogd als beheerder.</p>
-
-            <div class="card">
-                <h3>Speler Data Bekijken</h3>
-                <form action="/panel" method="GET">
-                    <label>Speler User ID:</label>
-                    <input type="text" name="userId" placeholder="Bijv. 2233747337" value="${searchId || ''}" required>
-                    <button type="submit">Data Inzien</button>
-                </form>
-            </div>
-
-            ${playerDataHtml}
-            
-            <div class="card">
-                <h3>Geld / Contant aanpassen</h3>
-                <form action="/admin/give-money" method="POST">
-                    <label>Speler User ID:</label>
-                    <input type="text" name="userId" placeholder="Bijv. 2233747337" required>
-                    <label>Bedrag (positief of negatief):</label>
-                    <input type="number" name="amount" placeholder="Bijv. 5000" required>
-                    <button type="submit">Geld Toevoegen</button>
-                </form>
-            </div>
-        </body>
-        </html>
-    `);
+    if (!req.session.user) return res.redirect('/login');
+    res.sendFile(path.join(__dirname, 'public', 'panel', 'index.html'));
 });
 
-// Actie om geld te geven vanuit het paneel
-app.post('/admin/give-money', (req, res) => {
-    if (!req.session.user) return res.status(403).send('Niet ingelogd');
+// API endpoint om spelerslijst op te halen voor de panel pagina
+app.get('/api/players', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Niet ingelogd" });
+    try {
+        const [rows] = await pool.query('SELECT user_id, data, updated_at FROM players ORDER BY updated_at DESC');
+        res.json({ success: true, players: rows, user: req.session.user, testMode: config.testMode });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
-    const { userId, amount } = req.body;
-    if (database[userId]) {
-        // Zorg dat contant bestaat en tel het op
-        database[userId].contant = (database[userId].contant || 0) + Number(amount);
-        res.send(`<h1>Succes!</h1><p>Speler ${userId} heeft ${amount} extra contant gekregen.</p><p><a href="/panel">Terug naar paneel</a></p>`);
-    } else {
-        res.send(`<h1>Fout</h1><p>Speler met ID ${userId} is momenteel niet online in de database.</p><p><a href="/panel">Terug naar paneel</a></p>`);
+// Specifieke speler data ophalen via API
+app.get('/api/player/:userId', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Niet ingelogd" });
+    const userId = req.params.userId;
+    try {
+        const [rows] = await pool.query('SELECT * FROM players WHERE user_id = ?', [userId]);
+        if (rows.length === 0) return res.status(404).json({ error: "Speler niet gevonden" });
+        res.json({ success: true, player: rows[0] });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Losse notificatie sturen via API
+app.post('/api/player/:userId/notify', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Niet ingelogd" });
+    const userId = req.params.userId;
+    const { message } = req.body;
+    const adminName = req.session.user.username || 'Admin';
+
+    try {
+        const [rows] = await pool.query('SELECT * FROM players WHERE user_id = ?', [userId]);
+        if (rows.length === 0) return res.status(404).json({ error: "Speler niet gevonden" });
+
+        let d = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+        d.pendingNotification = `[Admin ${adminName}]: ${message}`;
+
+        await pool.query('UPDATE players SET data = ? WHERE user_id = ?', [JSON.stringify(d), userId]);
+
+        await sendDiscordWebhook(
+            "📢 Admin Melding Verstuurd",
+            JSON.stringify({ admin: adminName, target_user: userId, bericht: message }, null, 2),
+            3447003
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Geld aanpassen via API
+app.post('/api/player/:userId/modify', async (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: "Niet ingelogd" });
+    const userId = req.params.userId;
+    const { type, amount, action } = req.body;
+    const numAmount = parseInt(amount) || 0;
+    const adminName = req.session.user.username || 'Admin';
+
+    try {
+        const [rows] = await pool.query('SELECT * FROM players WHERE user_id = ?', [userId]);
+        if (rows.length === 0) return res.status(404).json({ error: "Speler niet gevonden" });
+
+        let d = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
+
+        if (!d[type]) d[type] = 0;
+        const actieTekst = action === 'add' ? 'ontvangen' : 'afgeschreven';
+        
+        if (action === 'add') {
+            d[type] += numAmount;
+        } else if (action === 'remove') {
+            d[type] = Math.max(0, d[type] - numAmount);
+        }
+
+        d.pendingNotification = `Admin ${adminName} heeft €${numAmount} (${type}) ${actieTekst}. Nieuw saldo: €${d[type]}`;
+
+        await pool.query('UPDATE players SET data = ? WHERE user_id = ?', [JSON.stringify(d), userId]);
+
+        await sendDiscordWebhook(
+            "💵 Geld Transactie Uitgevoerd",
+            JSON.stringify({ admin: adminName, target_user: userId, type: type, actie: action, bedrag: numAmount, nieuw_totaal: d[type] }, null, 2),
+            15844367
+        );
+
+        res.json({ success: true, data: d });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
 // ==================== ROBLOX API ROUTES ====================
 
-app.get('/', (req, res) => {
-    res.send('Roblox API Backend is online!');
-});
-
-app.get('/loadPlayerData', (req, res) => {
+app.get('/loadPlayerData', async (req, res) => {
     const userId = req.query.user_id;
-    if (database[userId]) {
-        res.json({ success: true, exists: true, data: database[userId] });
-    } else {
-        res.json({ success: true, exists: false });
+    try {
+        const [rows] = await pool.query('SELECT data FROM players WHERE user_id = ?', [userId]);
+        if (rows.length > 0) {
+            let d = JSON.parse(rows[0].data);
+            const notification = d.pendingNotification || null;
+
+            if (notification) {
+                delete d.pendingNotification;
+                await pool.query('UPDATE players SET data = ? WHERE user_id = ?', [JSON.stringify(d), userId]);
+            }
+
+            res.json({ success: true, exists: true, data: d, notification: notification });
+        } else {
+            res.json({ success: true, exists: false });
+        }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
-app.post('/player/load', (req, res) => {
-    const { userId } = req.body;
-    if (database[userId]) {
-        res.json({ success: true, exists: true, data: database[userId] });
-    } else {
-        res.json({ success: true, exists: false });
-    }
-});
-
-app.post(['/player/create', '/createPlayerData'], (req, res) => {
+app.post(['/player/create', '/createPlayerData'], async (req, res) => {
     const userId = req.body.userId || req.body.user_id || req.body.player_id;
     const data = req.body.data || req.body;
-    if (userId) {
-        database[userId] = data;
+    
+    if (!userId) {
+        await sendDiscordWebhook(
+            "🚨 VPS Error: Create Data Failed",
+            JSON.stringify({ error: "Ontbrekende userId bij create request", body: req.body }, null, 2),
+            15158332
+        );
+        return res.status(400).json({ success: false, error: "Missing userId" });
+    }
+
+    try {
+        const [existing] = await pool.query('SELECT user_id FROM players WHERE user_id = ?', [userId]);
+        const isNewPlayer = existing.length === 0;
+
+        await pool.query(
+            'INSERT INTO players (user_id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?',
+            [userId, JSON.stringify(data), JSON.stringify(data)]
+        );
+
+        if (isNewPlayer) {
+            await sendDiscordWebhook(
+                "🎉 Nieuwe Speler Geregistreerd",
+                JSON.stringify({ user_id: userId, status: "Aangemaakt in database" }, null, 2),
+                3066993
+            );
+        }
+
         res.json({ success: true });
-    } else {
-        res.status(400).json({ success: false, error: "Missing userId" });
+    } catch (err) {
+        await sendDiscordWebhook("❌ MySQL Create Error", JSON.stringify({ error: err.message }, null, 2), 15158332);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 
-app.post(['/player/save', '/savePlayerData'], (req, res) => {
+app.post(['/player/save', '/savePlayerData'], async (req, res) => {
     const userId = req.body.userId || req.body.user_id || req.body.player_id;
     const data = req.body.data || req.body;
-    if (userId) {
-        database[userId] = data;
+
+    if (!userId) return res.status(400).json({ success: false, error: "Missing userId" });
+
+    try {
+        await pool.query(
+            'INSERT INTO players (user_id, data) VALUES (?, ?) ON DUPLICATE KEY UPDATE data = ?',
+            [userId, JSON.stringify(data), JSON.stringify(data)]
+        );
         res.json({ success: true });
-    } else {
-        res.status(400).json({ success: false, error: "Missing userId" });
+    } catch (err) {
+        await sendDiscordWebhook("❌ MySQL Save Error", JSON.stringify({ error: err.message }, null, 2), 15158332);
+        res.status(500).json({ success: false, error: err.message });
     }
-});
-
-app.post(['/player/lock', '/lockPlayerData'], (req, res) => {
-    const userId = req.body.userId || req.body.user_id || req.body.player_id;
-    locks[userId] = true;
-    res.json({ success: true });
-});
-
-app.post(['/player/unlock', '/unlockPlayerData'], (req, res) => {
-    const userId = req.body.userId || req.body.user_id || req.body.player_id;
-    delete locks[userId];
-    res.json({ success: true });
 });
 
 app.listen(PORT, () => {
