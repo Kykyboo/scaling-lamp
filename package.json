@@ -1,13 +1,10 @@
 {
-  "name": "roblox-vps-backend",
+  "name": "westdam-paneel",
   "version": "1.0.0",
-  "description": "Backend voor Roblox Data Manager",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
   "dependencies": {
-    "express": "^4.19.2",
-    "express-session": "^1.18.0"
+    "express": "^4.22.3",
+    "express-session": "^1.19.0",
+    "mysql2": "^3.24.4"
   }
 }
