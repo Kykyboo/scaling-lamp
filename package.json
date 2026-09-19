@@ -1,0 +1,12 @@
+{
+  "name": "roblox-vps-backend",
+  "version": "1.0.0",
+  "description": "Backend voor Roblox Data Manager",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
