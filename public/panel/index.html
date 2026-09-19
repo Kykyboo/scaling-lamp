@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Bestuur Panel - Westdam</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="relative min-h-screen bg-cover bg-center text-white font-sans selection:bg-white selection:text-zinc-950" style="background-image: url('/bg3.png');">
+    <!-- Donkere overlay met blur -->
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-md"></div>
+
+    <div class="relative z-10 max-w-7xl mx-auto px-4 py-8">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-zinc-800 pb-6 mb-8 gap-4 bg-zinc-900/80 p-6 rounded-2xl border border-zinc-800 shadow-2xl">
+            <div class="flex items-center space-x-4">
+                <img src="/logo.png" alt="Logo" class="h-14 w-auto object-contain drop-shadow-md">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-wide text-white">Westdam Bestuur Panel</h1>
+                    <p class="text-xs text-zinc-400 mt-0.5">Centraal beheer en speleradministratie</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <!-- Profielfoto & Displayname Container -->
+                <div id="userProfileContainer" class="hidden items-center space-x-3 bg-zinc-800/80 px-4 py-2 rounded-xl border border-zinc-700">
+                    <img id="userAvatar" src="" alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-zinc-600">
+                    <div class="flex flex-col">
+                        <span class="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold">Bestuurslid</span>
+                        <span id="userDisplayName" class="text-sm font-bold text-zinc-200">Laden...</span>
+                    </div>
+                </div>
+                
+                <a href="/login" class="px-4 py-2.5 bg-red-950/50 hover:bg-red-900/50 border border-red-900 text-red-400 text-sm font-semibold rounded-xl transition-colors">Uitloggen</a>
+            </div>
+        </header>
+
+        <!-- Testmodus Banner -->
+        <div id="testBanner" class="hidden bg-amber-950/50 border border-amber-900 text-amber-400 p-4 rounded-xl mb-8 flex items-center space-x-3 shadow-lg">
+            <span class="text-sm font-medium">⚠️ Let op: Testfase is ingeschakeld in de configuratie.</span>
+        </div>
+
+        <!-- Statistieken / Overzicht Kaarten met Emojis -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+                <div class="flex justify-between items-center mb-1">
+                    <p class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Totaal Spelers</p>
+                    <span class="text-xl">👥</span>
+                </div>
+                <h3 id="statTotalPlayers" class="text-3xl font-bold text-white">0</h3>
+            </div>
+            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+                <div class="flex justify-between items-center mb-1">
+                    <p class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Totaal Contant</p>
+                    <span class="text-xl">💵</span>
+                </div>
+                <h3 id="statTotalCash" class="text-3xl font-bold text-emerald-400">€0</h3>
+            </div>
+            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+                <div class="flex justify-between items-center mb-1">
+                    <p class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Totaal Bank</p>
+                    <span class="text-xl">🏦</span>
+                </div>
+                <h3 id="statTotalBank" class="text-3xl font-bold text-sky-400">€0</h3>
+            </div>
+            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+                <div class="flex justify-between items-center mb-1">
+                    <p class="text-xs font-medium text-zinc-400 uppercase tracking-wider">Totaal Zwart Geld</p>
+                    <span class="text-xl">💼</span>
+                </div>
+                <h3 id="statTotalBlack" class="text-3xl font-bold text-purple-400">€0</h3>
+            </div>
+        </div>
+
+        <!-- Extra Bestuursacties (Globaal) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl lg:col-span-3">
+                <h3 class="text-base font-bold mb-3 text-white">📢 Globale Server Mededeling (Announcement)</h3>
+                <p class="text-xs text-zinc-400 mb-4">Stuur direct een notificatie pop-up naar alle actieve spelers in de server.</p>
+                <div class="flex gap-3">
+                    <input type="text" id="globalAnnouncementMsg" placeholder="Typ een belangrijk bestuurbericht voor iedereen..." class="flex-1 px-4 py-3 bg-zinc-800/80 border border-zinc-700 rounded-xl focus:outline-none focus:border-white text-sm text-white">
+                    <button onclick="sendGlobalAnnouncement()" class="px-6 py-3 bg-white hover:bg-zinc-200 text-zinc-950 font-semibold rounded-xl transition-colors text-sm cursor-pointer shadow-lg">Verstuur naar Iedereen</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spelers Tabel Sectie -->
+        <div class="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                <h3 class="text-lg font-bold text-white">Geregistreerde Spelerslijst</h3>
+                <div class="w-full sm:w-80">
+                    <input type="text" id="searchInput" onkeyup="filterPlayers()" placeholder="Zoeken op User ID..." class="w-full px-4 py-2.5 bg-zinc-800/80 border border-zinc-700 rounded-xl focus:outline-none focus:border-white text-sm text-white">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-zinc-800">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-zinc-800/50 border-b border-zinc-800 text-zinc-400 text-xs uppercase tracking-wider">
+                            <th class="p-4">User ID</th>
+                            <th class="p-4">Contant</th>
+                            <th class="p-4">Bank</th>
+                            <th class="p-4">Zwart Geld</th>
+                            <th class="p-4">Speeltijd</th>
+                            <th class="p-4 text-right">Beheren</th>
+                        </tr>
+                    </thead>
+                    <tbody id="playerTableBody" class="divide-y divide-zinc-800 text-sm">
+                        <tr><td colspan="6" class="text-center p-8 text-zinc-500">Gegevens worden geladen...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Speler Beheren Modal -->
+    <div id="manageModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div class="relative w-full max-w-lg p-6 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl text-white">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">Speler Beheren: <code id="modalUserId" class="bg-zinc-800 px-2 py-0.5 rounded text-indigo-400 text-sm"></code></h3>
+                <button onclick="closeModal()" class="text-zinc-400 hover:text-white cursor-pointer p-1">✕</button>
+            </div>
+            
+            <!-- Losse Melding Sturen -->
+            <div class="mb-5 p-4 bg-zinc-800/50 border border-zinc-700 rounded-xl">
+                <label class="block text-xs font-semibold text-zinc-300 mb-2 uppercase">Individuele Melding Sturen</label>
+                <div class="flex gap-2">
+                    <input type="text" id="notifyMsg" placeholder="Typ bericht voor deze speler..." class="flex-1 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:border-white">
+                    <button onclick="sendNotify()" class="px-4 py-2 bg-white hover:bg-zinc-200 text-zinc-950 font-semibold rounded-lg text-sm cursor-pointer transition-colors">Melding</button>
+                </div>
+            </div>
+
+            <!-- Financiën Aanpassen -->
+            <div class="space-y-3">
+                <div class="p-3.5 bg-zinc-800/50 border border-zinc-700 rounded-xl flex justify-between items-center">
+                    <div>
+                        <span class="block text-xs text-zinc-400">Contant Geld</span>
+                        <span id="valContant" class="text-base font-bold text-emerald-400">€0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="amountContant" placeholder="Bedrag" class="w-24 px-2.5 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                        <button onclick="modifyMoney('contant', 'add')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 font-bold text-sm rounded-lg cursor-pointer">+</button>
+                        <button onclick="modifyMoney('contant', 'remove')" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 font-bold text-sm rounded-lg cursor-pointer">-</button>
+                    </div>
+                </div>
+
+                <div class="p-3.5 bg-zinc-800/50 border border-zinc-700 rounded-xl flex justify-between items-center">
+                    <div>
+                        <span class="block text-xs text-zinc-400">Bankrekening</span>
+                        <span id="valBank" class="text-base font-bold text-sky-400">€0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="amountBank" placeholder="Bedrag" class="w-24 px-2.5 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                        <button onclick="modifyMoney('bank', 'add')" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 font-bold text-sm rounded-lg cursor-pointer">+</button>
+                        <button onclick="modifyMoney('bank', 'remove')" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 font-bold text-sm rounded-lg cursor-pointer">-</button>
+                    </div>
+                </div>
+
+                <div class="p-3.5 bg-zinc-800/50 border border-zinc-700 rounded-xl flex justify-between items-center">
+                    <div>
+                        <span class="block text-xs text-zinc-400">Zwart Geld</span>
+                        <span id="valBlack" class="text-base font-bold text-purple-400">€0</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="amountBlack" placeholder="Bedrag" class="w-24 px-2.5 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white">
+                        <button onclick="modifyMoney('black', 'add')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 font-bold text-sm rounded-lg cursor-pointer">+</button>
+                        <button onclick="modifyMoney('black', 'remove')" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 font-bold text-sm rounded-lg cursor-pointer">-</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSelectedUserId = null;
+        let allPlayersData = [];
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch('/api/players');
+                if (res.status === 401) return window.location.href = '/login';
+                const data = await res.json();
+
+                if (data.testMode) document.getElementById('testBanner').classList.remove('hidden');
+                
+                // Profielfoto & Naam instellen
+                if (data.user) {
+                    const displayName = data.user.global_name || data.user.username || 'Bestuurslid';
+                    document.getElementById('userDisplayName').innerText = displayName;
+                    
+                    const avatarImg = document.getElementById('userAvatar');
+                    if (data.user.id && data.user.avatar) {
+                        avatarImg.src = `https://cdn.discordapp.com/avatars/${data.user.id}/${data.user.avatar}.png?size=128`;
+                    } else {
+                        const defaultAvatarIndex = (Number(data.user.id || 0) >> 22) % 6;
+                        avatarImg.src = `https://cdn.discordapp.com/embed/avatars/${defaultAvatarIndex}.png`;
+                    }
+                    
+                    document.getElementById('userProfileContainer').classList.remove('hidden');
+                    document.getElementById('userProfileContainer').classList.add('flex');
+                }
+
+                allPlayersData = data.players || [];
+                renderTable(allPlayersData);
+                updateStats(allPlayersData);
+            } catch (err) {
+                console.error('Fout bij laden dashboard:', err);
+            }
+        }
+
+        function updateStats(players) {
+            let totalCash = 0;
+            let totalBank = 0;
+            let totalBlack = 0;
+
+            players.forEach(row => {
+                let d = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+                totalCash += Number(d.contant || 0);
+                totalBank += Number(d.bank || 0);
+                totalBlack += Number(d.black || 0);
+            });
+
+            document.getElementById('statTotalPlayers').innerText = players.length;
+            document.getElementById('statTotalCash').innerText = `€${totalCash.toLocaleString()}`;
+            document.getElementById('statTotalBank').innerText = `€${totalBank.toLocaleString()}`;
+            document.getElementById('statTotalBlack').innerText = `€${totalBlack.toLocaleString()}`;
+        }
+
+        function renderTable(players) {
+            const tbody = document.getElementById('playerTableBody');
+            tbody.innerHTML = '';
+
+            if (players.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-6 text-zinc-500">Geen spelers gevonden.</td></tr>';
+                return;
+            }
+
+            players.forEach(row => {
+                let d = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+                tbody.innerHTML += `
+                    <tr class="hover:bg-zinc-800/40 transition-colors">
+                        <td class="p-4"><code class="bg-zinc-800 px-2.5 py-1 rounded-lg text-indigo-300 text-xs">${row.user_id}</code></td>
+                        <td class="p-4 text-emerald-400 font-medium">€${Number(d.contant || 0).toLocaleString()}</td>
+                        <td class="p-4 text-sky-400 font-medium">€${Number(d.bank || 0).toLocaleString()}</td>
+                        <td class="p-4 text-purple-400 font-medium">€${Number(d.black || 0).toLocaleString()}</td>
+                        <td class="p-4 text-zinc-300">${Math.floor((d.playtime || 0) / 60)} min</td>
+                        <td class="p-4 text-right">
+                            <button onclick="openModal('${row.user_id}')" class="px-3.5 py-1.5 bg-white hover:bg-zinc-200 text-zinc-950 font-semibold rounded-lg text-xs transition-colors cursor-pointer shadow">Beheren</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function filterPlayers() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allPlayersData.filter(row => row.user_id.toLowerCase().includes(query));
+            renderTable(filtered);
+        }
+
+        async function openModal(userId) {
+            currentSelectedUserId = userId;
+            document.getElementById('modalUserId').innerText = userId;
+            const res = await fetch(`/api/player/${userId}`);
+            const data = await res.json();
+            let d = typeof data.player.data === 'string' ? JSON.parse(data.player.data) : data.player.data;
+
+            document.getElementById('valContant').innerText = `€${Number(d.contant || 0).toLocaleString()}`;
+            document.getElementById('valBank').innerText = `€${Number(d.bank || 0).toLocaleString()}`;
+            document.getElementById('valBlack').innerText = `€${Number(d.black || 0).toLocaleString()}`;
+            document.getElementById('manageModal').classList.remove('hidden');
+        }
+
+        function closeModal() { 
+            document.getElementById('manageModal').classList.add('hidden'); 
+            loadDashboard(); 
+        }
+
+        async function sendNotify() {
+            const message = document.getElementById('notifyMsg').value;
+            if (!message) return alert('Vul een bericht in!');
+            await fetch(`/api/player/${currentSelectedUserId}/notify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+            alert('Melding succesvol verzonden naar de speler!');
+            document.getElementById('notifyMsg').value = '';
+        }
+
+        async function sendGlobalAnnouncement() {
+            const message = document.getElementById('globalAnnouncementMsg').value;
+            if (!message) return alert('Vul een mededeling in!');
+            
+            for (let row of allPlayersData) {
+                await fetch(`/api/player/${row.user_id}/notify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: `[BESTUUR ANNOUNCEMENT]: ${message}` })
+                });
+            }
+            alert('Globale mededeling verzonden naar alle spelers!');
+            document.getElementById('globalAnnouncementMsg').value = '';
+        }
+
+        async function modifyMoney(type, action) {
+            const amountInput = document.getElementById(`amount${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            const amount = amountInput.value;
+            if (!amount) return alert('Vul een bedrag in!');
+
+            const res = await fetch(`/api/player/${currentSelectedUserId}/modify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, amount, action })
+            });
+            const data = await res.json();
+            if(data.success) {
+                openModal(currentSelectedUserId);
+                amountInput.value = '';
+            }
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
